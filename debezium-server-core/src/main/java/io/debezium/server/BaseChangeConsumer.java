@@ -9,6 +9,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.inject.Instance;
@@ -19,6 +21,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.debezium.DebeziumException;
+import io.debezium.config.Configuration;
 import io.debezium.engine.Header;
 import io.debezium.runtime.BatchEvent;
 
@@ -65,6 +68,39 @@ public class BaseChangeConsumer {
         }
 
         return ret;
+    }
+
+    /**
+     * Get a {@link Configuration} instance from a subset of the MicroProfile configuration properties
+     * that matches the given prefix. The resulting configuration performs case-insensitive key lookups,
+     * which is necessary because MicroProfile Config maps environment variable names to all-lowercase
+     * property names, while Debezium field definitions may use camelCase.
+     *
+     * @param config    The global MicroProfile configuration object.
+     * @param prefix    The prefix to filter property names.
+     *
+     * @return          A case-insensitive {@link Configuration} containing property names without
+     *                  the prefix; never null.
+     */
+    protected Configuration getConfiguration(Config config, String prefix) {
+        final TreeMap<String, String> props = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        for (String propertyName : config.getPropertyNames()) {
+            if (propertyName.startsWith(prefix)) {
+                final String newPropertyName = propertyName.substring(prefix.length());
+                props.put(newPropertyName, config.getConfigValue(propertyName).getValue());
+            }
+        }
+        return new Configuration() {
+            @Override
+            public String getString(String key) {
+                return props.get(key);
+            }
+
+            @Override
+            public Set<String> keys() {
+                return props.keySet();
+            }
+        };
     }
 
     protected byte[] getBytes(Object object) {

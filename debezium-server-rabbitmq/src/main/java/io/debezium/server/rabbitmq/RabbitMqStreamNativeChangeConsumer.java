@@ -168,8 +168,7 @@ public class RabbitMqStreamNativeChangeConsumer extends BaseChangeConsumer imple
         final Config mpConfig = ConfigProvider.getConfig();
 
         // Load configuration
-        io.debezium.config.Configuration configuration = io.debezium.config.Configuration.from(getConfigSubset(mpConfig, PROP_PREFIX));
-        this.config = new RabbitMqStreamNativeChangeConsumerConfig(configuration);
+        this.config = new RabbitMqStreamNativeChangeConsumerConfig(getConfiguration(mpConfig, PROP_PREFIX));
 
         if (config.getConnectionHost() != null || config.getConnectionPort() != null) {
             LOGGER.warn("The parameters connection.host and connection.port are deprecated, please use rabbitmqstream.host and rabbitmqstream.port moving forward.");

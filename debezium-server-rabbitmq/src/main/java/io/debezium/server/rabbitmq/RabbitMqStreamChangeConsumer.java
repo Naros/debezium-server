@@ -88,8 +88,7 @@ public class RabbitMqStreamChangeConsumer extends BaseChangeConsumer implements 
         final Config mpConfig = ConfigProvider.getConfig();
 
         // Load configuration
-        io.debezium.config.Configuration configuration = io.debezium.config.Configuration.from(getConfigSubset(mpConfig, PROP_PREFIX));
-        this.config = new RabbitMqStreamChangeConsumerConfig(configuration);
+        this.config = new RabbitMqStreamChangeConsumerConfig(getConfiguration(mpConfig, PROP_PREFIX));
 
         ConnectionFactory factory = new ConnectionFactory();
         Map<String, String> configProperties = getConfigSubset(mpConfig, PROP_CONNECTION_PREFIX).entrySet().stream()

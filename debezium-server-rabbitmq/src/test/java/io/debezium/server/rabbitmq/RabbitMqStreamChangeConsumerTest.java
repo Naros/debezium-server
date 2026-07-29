@@ -15,6 +15,8 @@ import static org.mockito.Mockito.when;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
 
@@ -27,6 +29,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Channel;
 
+import io.debezium.config.Configuration;
+import io.debezium.doc.FixFor;
 import io.debezium.engine.ChangeEvent;
 import io.debezium.engine.DebeziumEngine.RecordCommitter;
 import io.debezium.runtime.BatchEvent;
@@ -102,6 +106,58 @@ class RabbitMqStreamChangeConsumerTest {
         when(streamNameMapperMock.map(topicName)).thenReturn(topicName);
 
         rabbitMqStreamChangeConsumer.config = createConfig(DELIVERY_MODE, ACK_TIMEOUT, topicName, "topic", "ignored", true, true);
+
+        // when
+        rabbitMqStreamChangeConsumer.handle(records);
+
+        // then
+        verify(channelMock).queueDeclare(topicName, true, false, false, null);
+
+        final AMQP.BasicProperties expectedProperties = new AMQP.BasicProperties.Builder()
+                .deliveryMode(DELIVERY_MODE)
+                .headers(Map.of())
+                .build();
+
+        verify(channelMock).basicPublish(topicName, topicName, expectedProperties, payload.getBytes());
+        verify(channelMock).waitForConfirmsOrDie(ACK_TIMEOUT);
+    }
+
+    @Test
+    @FixFor("debezium/dbz#2317")
+    void testHandleBatchTopicRoutingKeySourceFromEnvironmentVariable() throws InterruptedException, IOException, TimeoutException {
+        // given
+        String topicName = "test-topic";
+        String payload = "test content";
+        CapturingEvents<BatchEvent> records = createCapturingEvents(topicName, eventMock);
+
+        when(eventMock.value()).thenReturn(payload);
+        when(eventMock.headers()).thenReturn(List.of());
+        when(eventMock.destination()).thenReturn(topicName);
+        when(streamNameMapperMock.map(topicName)).thenReturn(topicName);
+
+        // Simulate environment variable mapping where property names are all lowercase
+        TreeMap<String, String> props = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        props.put("deliverymode", String.valueOf(DELIVERY_MODE));
+        props.put("acktimeout", String.valueOf(ACK_TIMEOUT));
+        props.put("exchange", topicName);
+        props.put("routingkey.source", "topic");
+        props.put("routingkey", "ignored");
+        props.put("autocreateroutingkey", "true");
+        props.put("routingkeydurable", "true");
+        props.put("routingkeyfromtopicname", "false");
+        props.put("null.value", "default");
+        Configuration configuration = new Configuration() {
+            @Override
+            public String getString(String key) {
+                return props.get(key);
+            }
+
+            @Override
+            public Set<String> keys() {
+                return props.keySet();
+            }
+        };
+        rabbitMqStreamChangeConsumer.config = new RabbitMqStreamChangeConsumerConfig(configuration);
 
         // when
         rabbitMqStreamChangeConsumer.handle(records);
